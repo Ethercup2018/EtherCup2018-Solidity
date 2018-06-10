@@ -255,7 +255,7 @@ contract CountryJackpot is ERC721, Ownable{
                 if (countryIndexToOwner[countryId] == _owner)
                 {
                     result[resultIndex] = countryId;
-                    resultIndex = resultIndex++;
+                    resultIndex++;
                 }
             }
             return result;
