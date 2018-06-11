@@ -152,6 +152,10 @@ contract CountryJackpot is ERC721, Ownable{
         return (owner);
     }
 
+    //@dev this function is required to recieve funds
+    function () public payable {
+    }
+
     //@notice Allows someone to send ether and obtain a country token
     function purchase(uint256 _tokenId) public payable {
         require(!jackpotCompleted);

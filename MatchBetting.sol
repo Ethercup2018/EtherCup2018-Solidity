@@ -33,6 +33,9 @@ contract MatchBetting {
     address public owner;
     // The jackpot address, to which some of the proceeds goto from the match
     address private jackpotAddress;
+
+    address[] public betters;
+
     // Only the owner will be allowed to excute the function.
     modifier onlyOwner() {
         require(msg.sender == owner);
@@ -66,6 +69,11 @@ contract MatchBetting {
         require(msg.value >= minimumBetAmount);
         require(!stopMatchBetting);
         require(!matchCompleted);
+
+        if(teams[0].bettingContribution[msg.sender] == 0 || teams[1].bettingContribution[msg.sender] == 0) {
+            betters.push(msg.sender);
+        }
+
         if (teams[index].bettingContribution[msg.sender] == 0) {
             teams[index].totalParticipants = teams[index].totalParticipants.add(1);
         }
@@ -78,9 +86,9 @@ contract MatchBetting {
         if (winnerIndex == 0 || winnerIndex == 1) {
             //Match is not draw, double check on name and index so that no mistake is made
             require(compareStrings(teams[winnerIndex].name, teamName));
-            Team storage losingTeam = (winnerIndex == 0) ? teams[1] : teams[0];
-            if(losingTeam.totalAmount != 0){
-                uint jackpotShare = (losingTeam.totalAmount).div(5);
+            uint loosingIndex = (winnerIndex == 0) ? 1 : 0;
+            if (teams[loosingIndex].totalAmount != 0) {
+                uint jackpotShare = (teams[loosingIndex].totalAmount).div(5);
                 jackpotAddress.transfer(jackpotShare);
             }
         }
@@ -117,15 +125,23 @@ contract MatchBetting {
             Team storage losingTeam = (winIndex == 0) ? teams[1] : teams[0];
             uint winTotalAmount = teams[winIndex].totalAmount;
 
-            //original Bet + (original bet * 80 % of bet on losing side)/bet on winning side
-            uint userTotalShare = betValue;
-            if(losingTeam.totalAmount != 0){
-                uint bettingShare = betValue.mul(80).div(100).mul(losingTeam.totalAmount).div(winTotalAmount);
-                userTotalShare = userTotalShare.add(bettingShare);
-            }
+            if(losingTeam.totalAmount == 0){
+                msg.sender.transfer(betValue);
+            }else{
+                //original Bet + (original bet * 80 % of bet on losing side)/bet on winning side
+                uint userTotalShare = betValue;
+                if(losingTeam.totalAmount != 0){
+                    uint bettingShare = betValue.mul(80).div(100).mul(losingTeam.totalAmount).div(winTotalAmount);
+                    userTotalShare = userTotalShare.add(bettingShare);
+                }
 
-            msg.sender.transfer(userTotalShare);
+                msg.sender.transfer(userTotalShare);
+            }
         }
+    }
+
+    function getBetters() public view returns (address[]) {
+        return betters;
     }
 
     //@notice get various information about the match and its current state.
