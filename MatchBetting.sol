@@ -10,6 +10,7 @@ contract MatchBetting {
     struct Team {
         string name;
         mapping(address => uint) bettingContribution;
+        mapping(address => uint) ledgerBettingContribution;
         uint totalAmount;
         uint totalParticipants;
     }
@@ -70,7 +71,7 @@ contract MatchBetting {
         require(!stopMatchBetting);
         require(!matchCompleted);
 
-        if(teams[0].bettingContribution[msg.sender] == 0 || teams[1].bettingContribution[msg.sender] == 0) {
+        if(teams[0].bettingContribution[msg.sender] == 0 && teams[1].bettingContribution[msg.sender] == 0) {
             betters.push(msg.sender);
         }
 
@@ -78,6 +79,7 @@ contract MatchBetting {
             teams[index].totalParticipants = teams[index].totalParticipants.add(1);
         }
         teams[index].bettingContribution[msg.sender] = teams[index].bettingContribution[msg.sender].add(msg.value);
+        teams[index].ledgerBettingContribution[msg.sender] = teams[index].ledgerBettingContribution[msg.sender].add(msg.value);
         teams[index].totalAmount = teams[index].totalAmount.add(msg.value);
     }
 
@@ -87,7 +89,8 @@ contract MatchBetting {
             //Match is not draw, double check on name and index so that no mistake is made
             require(compareStrings(teams[winnerIndex].name, teamName));
             uint loosingIndex = (winnerIndex == 0) ? 1 : 0;
-            if (teams[loosingIndex].totalAmount != 0) {
+            // Send Share to jackpot only when Ether are placed on both the teams
+            if (teams[winnerIndex].totalAmount != 0 && teams[loosingIndex].totalAmount != 0) {
                 uint jackpotShare = (teams[loosingIndex].totalAmount).div(5);
                 jackpotAddress.transfer(jackpotShare);
             }
@@ -117,25 +120,35 @@ contract MatchBetting {
 
             msg.sender.transfer(totalBetContribution);
         } else {
-            uint betValue = teams[winIndex].bettingContribution[msg.sender];
+            uint loosingIndex = (winIndex == 0) ? 1 : 0;
+            // If No Ether were placed on winning Team - Allow claim Ether placed on loosing side.
 
-            require(betValue != 0);
-            teams[winIndex].bettingContribution[msg.sender] = 0;
+            uint betValue;
+            if (teams[winIndex].totalAmount == 0) {
+                betValue = teams[loosingIndex].bettingContribution[msg.sender];
+                require(betValue != 0);
 
-            Team storage losingTeam = (winIndex == 0) ? teams[1] : teams[0];
-            uint winTotalAmount = teams[winIndex].totalAmount;
-
-            if(losingTeam.totalAmount == 0){
+                teams[loosingIndex].bettingContribution[msg.sender] = 0;
                 msg.sender.transfer(betValue);
-            }else{
-                //original Bet + (original bet * 80 % of bet on losing side)/bet on winning side
-                uint userTotalShare = betValue;
-                if(losingTeam.totalAmount != 0){
-                    uint bettingShare = betValue.mul(80).div(100).mul(losingTeam.totalAmount).div(winTotalAmount);
-                    userTotalShare = userTotalShare.add(bettingShare);
-                }
+            } else {
+                betValue = teams[winIndex].bettingContribution[msg.sender];
+                require(betValue != 0);
 
-                msg.sender.transfer(userTotalShare);
+                teams[winIndex].bettingContribution[msg.sender] = 0;
+
+                uint winTotalAmount = teams[winIndex].totalAmount;
+                uint loosingTotalAmount = teams[loosingIndex].totalAmount;
+
+                if (loosingTotalAmount == 0) {
+                    msg.sender.transfer(betValue);
+                } else {
+                    //original Bet + (original bet * 80 % of bet on losing side)/bet on winning side
+                    uint userTotalShare = betValue;
+                    uint bettingShare = betValue.mul(80).div(100).mul(loosingTotalAmount).div(winTotalAmount);
+                    userTotalShare = userTotalShare.add(bettingShare);
+
+                    msg.sender.transfer(userTotalShare);
+                }
             }
         }
     }
@@ -150,9 +163,14 @@ contract MatchBetting {
             teams[1].totalAmount, teams[1].totalParticipants, winIndex, matchCompleted, minimumBetAmount, matchNumber, stopMatchBetting);
     }
 
-    //@notice Returns how much a user has bet on the match.
+    //@notice Returns users current amount of bet on the match
     function userBetContribution(address userAddress) public view returns (uint, uint) {
         return (teams[0].bettingContribution[userAddress], teams[1].bettingContribution[userAddress]);
+    }
+
+    //@notice Returns how much a user has bet on the match.
+    function ledgerUserBetContribution(address userAddress) public view returns (uint, uint) {
+        return (teams[0].ledgerBettingContribution[userAddress], teams[1].ledgerBettingContribution[userAddress]);
     }
 
     //@notice Private function the helps in comparing strings.
